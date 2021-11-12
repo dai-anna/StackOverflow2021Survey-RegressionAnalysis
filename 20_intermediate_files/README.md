@@ -1,0 +1,1 @@
+This directory contains the intermediate files created from the raw data.
