@@ -1,5 +1,6 @@
 # Others
 .DS_Store
+.Rhistory
 survey_results_public.csv
 
 # Byte-compiled / optimized / DLL files
