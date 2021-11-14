@@ -78,10 +78,10 @@ unique(df$LearnCode) # multiple choice and busy
 unique(df$YearsCode) # maybe keep one of the below
 unique(df$YearsCodePro)
 unique(df$DevType)
-df %>% filter(grepl("Senior Executive (C-Suite, VP, etc.)", DevType))
-df %>% filter(df %in% "Senior Executive (C-Suite, VP, etc.)")
+df$Leader = grepl("Senior Executive", df$DevType)
+
 unique(df$OrgSize)
-df["Just me - I am a freelancer, sole proprietor, etc.", OrgSize]
+df[OrgSize == "Just me - I am a freelancer, sole proprietor, etc."]
 unique(df$Age)
 unique(df$Gender)
 df[df$Trans != "Yes", "Gender"]
