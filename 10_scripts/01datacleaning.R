@@ -374,13 +374,13 @@ df_us$Ethnicity[233]
 # if (is.element("Multiracial", df_us$Ethnicity_clean) {
 #   df_us$Ethnicity_clean = "Multiracial"
 # }
-
-
-for item in df_us$Ethnicity_check{
-  if ("Multiracial" %in% df_us$Ethnicity_clean) {
-    Ethnicity_clean[[item]] = "Multiracial")
-  }
-}
+# 
+# 
+# for item in df_us$Ethnicity_check{
+#   if ("Multiracial" %in% df_us$Ethnicity_clean) {
+#     Ethnicity_clean[[item]] = "Multiracial")
+#   }
+# }
 
 #
 # for j in 1:dim(df_us)[1] {
@@ -439,6 +439,5 @@ df_world[state_level] = NULL
 df = df_us
 
 # keep only complete data points not counting for location
-df = df %>% drop_na()
 
 saveRDS(df, "../20_intermediate_files/clean_data_set.rds")
