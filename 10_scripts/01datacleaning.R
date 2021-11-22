@@ -6,9 +6,10 @@ library(knitr)
 library(dplyr)
 library(tidyr)
 library(kableExtra)
+library(data.table)
 
 ################################################################################
-############################### 0. Loading the data ############################
+################################# 0. LOAD THE DATA #############################
 ################################################################################
 
 df = read.csv("../00_source_data/survey_results_public.csv")
@@ -34,34 +35,23 @@ unique(df$Employment)
 df = df %>% filter(Employment == "Employed full-time")
 df$Employment = NULL
 
-saveRDS(df, "../20_intermediate_files/initial_data_set.rds")
+# saveRDS(df, "../20_intermediate_files/initial_data.rds")
 
 
 ################################################################################
-############################### 1. Explore the data ############################
+######################### 1. EXPLORE AND CLEAN THE DATA ########################
 ################################################################################
 
+################################################################################
 ############################# US STATES APPROACH ###############################
 
-df_us = readRDS("../20_intermediate_files/initial_data_set.rds")
+df_us = readRDS("../20_intermediate_files/initial_data.rds")
 
 sort(unique(df_us$Country))
 df_us = df_us %>% filter(Country == "United States of America")
 
 location_cols = c("Country", "UK_Country")
 df_us[location_cols] = NULL
-
-############################## DEAL WITH N/AS ##################################
-
-############## Examine N/As ##############
-sapply(df_us, function(z)
-  sum(is.na(z)) / length(z))
-sapply(df_us, function(z)
-  sum(is.na(z)))
-
-############## DROP/IMPUTE N/As ##############
-# TODO: look into imputations later
-df_us = df_us %>% drop_na()
 
 ########################## EXAMINE RESPONSE VARIABLE ###########################
 
@@ -93,10 +83,10 @@ convertcurrency = function(x, from, to) {
 }
 
 # Testing
-convertcurrency(100, "UGX\tUgandan shilling", "USD\tUnited States dollar")
-convertcurrency(100, "CAD\tCanadian dollar", "USD\tUnited States dollar")
-convertcurrency(100, "MKD\tMacedonian denar", "USD\tUnited States dollar")
-convertcurrency(100, "BRL\tBrazilian real", "USD\tUnited States dollar")
+# convertcurrency(100, "UGX\tUgandan shilling", "USD\tUnited States dollar")
+# convertcurrency(100, "CAD\tCanadian dollar", "USD\tUnited States dollar")
+# convertcurrency(100, "MKD\tMacedonian denar", "USD\tUnited States dollar")
+# convertcurrency(100, "BRL\tBrazilian real", "USD\tUnited States dollar")
 
 
 # Average software developers in the US according different sources are:
@@ -107,31 +97,38 @@ convertcurrency(100, "BRL\tBrazilian real", "USD\tUnited States dollar")
 # I will use the lower and upper bound of this data to evaluate comp outlier treatment
 
 # count of foreign currencies: only 7 people reported foreign currencies
+
 df_us %>% filter(Currency != "USD\tUnited States dollar") %>% count
 df_us %>% filter(Currency != "USD\tUnited States dollar")
 # Looking at the different salaries, it looks like the UGX is most like mistyped USD as they are next to each other in the survey
-df_us[df_us$Currency == "UGX\tUgandan shilling", c("ConvertedCompYearly", "CompTotal", "Currency")] %>% rownames
+outlier_index = df_us[df_us$Currency == "UGX\tUgandan shilling", c("ConvertedCompYearly", "CompTotal", "Currency")] %>% rownames
 df_us[df_us$Currency ==
         "UGX\tUgandan shilling", "ConvertedCompYearly"] =
   df_us[df_us$Currency ==
           "UGX\tUgandan shilling", "CompTotal"]
 df_us[df_us$Currency == "UGX\tUgandan shilling", "Currency"] = "USD\tUnited States dollar"
-df_us[868, ]
+df_us[outlier_index,]
 
 # Evaluate lower bound of total comp < around 10K, which is equivalent in our data to the bottom 0.2% of the data
 # this is less than half of the lower bound of full-time developer salary according to our research
 # 15 people heavily skews our distribution and entirely out of "normal" range, so we will drop them
-lower_bound_check = quantile(df_us$ConvertedCompYearly, 0.002)
+sum(is.na(df_us$ConvertedCompYearly))
+
+lower_bound_check = quantile(df_us$ConvertedCompYearly, 0.002, na.rm = TRUE)
 lower_bound_check
+
 df_us %>% filter(ConvertedCompYearly < lower_bound_check) %>% count
-df_us = df_us %>% filter(ConvertedCompYearly >= lower_bound_check)
+df_us = df_us %>% filter(is.na(df_us$ConvertedCompYearly)|df_us$ConvertedCompYearly >= lower_bound_check)
+
+sum(is.na(df_us$ConvertedCompYearly))
+
 
 ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
 
 # Examine closely the upper bound of total comp > around 430K, which is top 5% of of dataset
 # this is more than double the upper bound of full-time developer salary according to our research
 
-upper_bound_check = quantile(df_us$ConvertedCompYearly, 0.975) ##### <<<<<<<<< .95 to use top 5% cutoff
+upper_bound_check = quantile(df_us$ConvertedCompYearly, 0.975, na.rm = TRUE) ##### <<<<<<<<< .95 to use top 5% cutoff
 upper_bound_check # this is already much higher than the
 df_check = df_us %>%
   filter(!compcompare) %>%
@@ -160,16 +157,22 @@ df_us %>%
   filter(!compcompare) %>%
   filter(CompTotal > min(df_check$CompTotal)) %>% #36000 <<<<<< to use 5% threshold
   filter(ConvertedCompYearly >= upper_bound_check) %>%
-  count
+  count # total 207 observations >= upper bound
 
 df_us$ConvertedCompYearly[df_us$compcompare == FALSE &
                             df_us$CompTotal > min(df_check$CompTotal) &
                             #36000 <<<<<< to use 5% threshold
-                            df_us$ConvertedCompYearly >= upper_bound_check] =
+                            df_us$ConvertedCompYearly >= upper_bound_check & 
+                            !is.na(df_us$ConvertedCompYearly)] =
   df_us$CompTotal[df_us$compcompare == FALSE &
                     df_us$CompTotal > min(df_check$CompTotal) &
                     #36000 <<<<<< to use 5% threshold
-                    df_us$ConvertedCompYearly >= upper_bound_check]
+                    df_us$ConvertedCompYearly >= upper_bound_check &
+                    !is.na(df_us$ConvertedCompYearly)]
+
+
+sum(is.na(df_us$ConvertedCompYearly))
+
 
 ############## Plot the outcome ###############
 ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
@@ -178,13 +181,31 @@ ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
 ############## Log to the Rescue ###############
 df_us$logConvertedCompYearly = log(df_us$ConvertedCompYearly)
 ggplot(data = df_us, aes(x = logConvertedCompYearly)) + geom_histogram(bins = 50)  # few large outliers
-# MUCH MUCH BETTER
+# MUCH BETTER -> Issues due to N/As?
 
+df_test = data.frame(df_us$ConvertedCompYearly) %>% drop_na()
+df_test$df_us.ConvertedCompYearly
+ggplot(data = df_test, aes(x = df_us.ConvertedCompYearly)) + geom_histogram(bins = 50)  # few large outliers
+ggplot(data = df_test, aes(x = log(df_us.ConvertedCompYearly))) + geom_histogram(bins = 50)  # few large outliers
+
+################################################################################
+########################## ADD INTERMEDIATE DATA ###############################
+# saveRDS(df_us, "../20_intermediate_files/clean_response.rds")
+
+df_us = readRDS("../20_intermediate_files/clean_response.rds")
+drop_cols = c("CompTotal", "CompFreq", "compcompare")
+df_us[drop_cols] = NULL
+
+################################################################################
 
 ############################# EXAMINE PREDICTORS ###############################
 
 # Candidate for Hierarchy
 table(df_us$US_State) # ok - state with least input is 2
+
+####################### SINGLE SELECTION FACTOR VARIABLES ######################
+
+df_us$Currency = as.factor(df_us$Currency)
 
 # Ordinal? Factor Variables
 table(df_us$EdLevel)
@@ -238,6 +259,7 @@ df_us$Age = factor(
 )
 
 # Factor Variable
+table(df_us$Trans)
 df_us$Trans[df_us$Trans == "Or, in your own words:"] = "Other"
 df_us$Trans = factor(df_us$Trans)
 
@@ -253,7 +275,6 @@ df_us$YearsCodeNum = as.numeric(df_us$YearsCodeNum)
 hist(df_us$YearsCodeNum)
 hist(log(df_us$YearsCodeNum))
 
-
 unique(df_us$YearsCodePro)
 df_us$YearsCodeProNum = df_us$YearsCodePro
 df_us$YearsCodeProNum[df_us$YearsCodeProNum == "Less than 1 year"] = 0
@@ -263,19 +284,33 @@ hist(df_us$YearsCodeProNum)
 hist(log(df_us$YearsCodeProNum))
 
 
-# Multi-Hot-Encode & Unordered Variables
-unique(df_us$LearnCode) # need to collapse
-unique(df_us$DevType) # need to collapse
-unique(df_us$Gender) # turn into single choice
-unique(df_us$Sexuality)  # turn into single choice
-unique(df_us$Ethnicity)  # turn into single choice
-unique(df_us$Accessibility)  # turn into single choice
-unique(df_us$MentalHealth)  # turn into single choice
+# Multi-select variables
+# unique(df_us$LearnCode) # need to collapse
+# unique(df_us$DevType) # need to collapse
+# unique(df_us$Gender) # turn into single choice
+# unique(df_us$Sexuality)  # turn into single choice
+# unique(df_us$Ethnicity)  # turn into single choice
+# unique(df_us$Accessibility)  # turn into single choice
+# unique(df_us$MentalHealth)  # turn into single choice
+
+
+################### CONVERT MULTISELECT TO MULTI-HOT-ENCODED ###################
 
 # First convert to list and unlist to see unique variables
-
 listvar = function(col) {
   newcol = strsplit(col, ";")
+  return(newcol)
+}
+
+# unlist them as unique values
+unlistvar = function(col) {
+  uniques = col %>% unlist %>% unique
+  return(uniques)
+}
+
+# collapse variable and unlist
+listvar_multi = function(col, mmap) {
+  newcol = strsplit(col, ";") %>% sapply(function(z) unique(mmap[z]))
   return(newcol)
 }
 
@@ -288,121 +323,253 @@ multiselect_cols = c(
   "Accessibility",
   "MentalHealth"
 )
-multiselect_cols_inspect = c(
-  "LearnCode_check",
-  "DevType_check",
-  "Gender_check",
-  "Sexuality_check",
-  "Ethnicity_check",
-  "Accessibility_check",
-  "MentalHealth_check"
-)
-
-for (i in 1:length(multiselect_cols)) {
-  df_us[[multiselect_cols_inspect[i]]] = listvar(df_us[[multiselect_cols[i]]])
-}
-
-# for (col in multiselect_cols) {
-#   df_us[[col]] = listvar(df_us[[col]])
+# multiselect_cols_inspect = c(
+#   "LearnCode_check",
+#   "DevType_check",
+#   "Gender_check",
+#   "Sexuality_check",
+#   "Ethnicity_check",
+#   "Accessibility_check",
+#   "MentalHealth_check"
+# )
+# 
+# for (i in 1:length(multiselect_cols)) {
+#   df_us[[multiselect_cols_inspect[i]]] = listvar(df_us[[multiselect_cols[i]]])
 # }
 
-unlistvar = function(col) {
-  uniques = col %>% unlist %>% unique
-  return(uniques)
+# unlists into new columns
+for (col in multiselect_cols) {
+  df_us[[paste0(col,"_check")]] = listvar(df_us[[col]])
 }
 
 # Collapsing variables
 unlistvar(df_us$LearnCode_check)
 learncode_map = c(
-  "Online" = c(
-    "Other online resources (ex: videos, blogs, etc",
-    "Online Forum",
-    "Online Courses or Certification"
-  ),
-  "Other" = c("Other (please specify):", "Books / Physical media"),
-  "Friends, Family, Colleagues" = c("Colleague", "Friend or family member")
+  "Other online resources (ex: videos, blogs, etc)" = "Online Resources",
+  "Online Forum" = "Online Resources",
+  "Online Courses or Certification" = "Online Resources",
+  "Other (please specify):" = "Other",
+  "Books / Physical media" = "Other",
+  "Colleague" = "Peers",
+  "Friend or family member" = "Peers",
+  "Coding Bootcamp" = "Coding Bootcamp",
+  "School" = "School"
 )
+df_us$LearnCode_list = listvar_multi(df_us$LearnCode, learncode_map)
+
+unlistvar(df_us$LearnCode_list)
+
+#****************************VISIT*********************************#
+for (uq in unlistvar(df_us$LearnCode_list)) {
+  if(!is.na(df_us$LearnCode_list[1])) {
+    df_us[[uq]] = sapply(df_us$LearnCode_list, function(z)
+      uq %in% z)
+    df_us[[uq]] %<>% as.logical
+  }
+}
+
+df_us[25:36,]
+
+df_us[!is.na(df_us$LearnCode_list), c("Online Resources",
+                                     "School",
+                                     "Peers",
+                                     "Other",
+                                     "Coding Bootcamp")]
+
+df_us[is.na(df_us$LearnCode_list), c("Online Resources",
+                                     "School",
+                                     "Peers",
+                                     "Other",
+                                     "Coding Bootcamp")] = NA
+
+
+df_us[c("LearnCode_check","LearnCode_list")] = NULL
+
 
 unlistvar(df_us$DevType_check)
 devtype_map = c(
-  "Software Development" = c(
-    "Developer, embedded applications or devices",
-    "Developer, back-end",
-    "Developer, front-end",
-    "Developer, full-stack",
-    "Developer, desktop or enterprise applications",
-    "Developer, game or graphics",
-    "Developer, QA or test",
-    "Engineer, site reliability",
-    "Developer, mobile",
-    "Engineering manager",
-    "Designer"
-  ),
-  "Data Science" = c(
-    "Engineer, data",
-    "Data scientist or machine learning specialist",
-    "Data or business analyst"
-  ),
-  "DevOps and Admin" = c(
-    "Database administrator",
-    "DevOps specialist",
-    "System administrator"
-  ),
-  "Researcher" = c("Scientist",
-                   "Academic researcher"),
-  "Other Non-Technical" = c("Marketing or sales professional",
-                            "Other (please specify):")
+  "Developer, embedded applications or devices" = "Software Development",
+  "Developer, back-end" = "Software Development",
+  "Developer, front-end" = "Software Development",
+  "Developer, full-stack" = "Software Development",
+  "Developer, desktop or enterprise applications" = "Software Development",
+  "Developer, game or graphics" = "Software Development",
+  "Developer, QA or test" = "Software Development",
+  "Engineer, site reliability" = "Software Development",
+  "Developer, mobile" = "Software Development",
+  "Engineering manager" = "Software Development",
+  "Designer" = "Software Development",
+  "Engineer, data" = "Data Science",
+  "Data scientist or machine learning specialist" = "Data Science",
+  "Data or business analyst" = "Data Science",
+  "Database administrator" = "DevOps and Admin",
+  "DevOps specialist" = "DevOps and Admin",
+  "System administrator" = "DevOps and Admin",
+  "Scientist" = "Research",
+  "Academic researcher" = "Research",
+  "Marketing or sales professional" = "Other/Non-Technical",
+  "Other (please specify):" = "Other/Non-Technical",
+  "Product manager" = "Product manager",
+  "Senior Executive (C-Suite, VP, etc.)" = "Senior Executive (C-Suite, VP, etc.)",
+  "Educator" = "Other/Non-Technical",
+  "Student" = "Other/Non-Technical"
 )
+df_us$DevType_list = listvar_multi(df_us$DevType, devtype_map)
+unlistvar(df_us$DevType_list)
 
-# Turn into single select
+for (uq in unlistvar(df_us$DevType_list)) {
+  if(!is.na(df_us$DevType_list)) {
+    df_us[[uq]] = sapply(df_us$DevType_list, function(z)
+      uq %in% z)
+    df_us[[uq]] %<>% as.logical
+  }
+}
+
+df_us[is.na(df_us$DevType_list), c(
+  "Software Development",
+  "Data Science",
+  "Research",
+  "DevOps and Admin",
+  "Product manager" ,
+  "Senior Executive (C-Suite, VP, etc.)",
+  "Other/Non-Technical"
+)]
+
+df_us[is.na(df_us$DevType_list), c(
+  "Software Development",
+  "Data Science",
+  "Research",
+  "DevOps and Admin",
+  "Product manager" ,
+  "Senior Executive (C-Suite, VP, etc.)",
+  "Other/Non-Technical"
+)] = NA
+
+df_us[c("DevType_check","DevType_list")] = NULL
+
+############### CONVERT MULTI SELECT TO SINGLE SELECT BELOW ####################
 # if multiple chosen, then "Other"
 unlistvar(df_us$Gender_check)
+df_us$Gender %>% unique
+
+df_us$Gender[df_us$Gender != "Prefer not to say" &
+                     df_us$Gender != "Woman" &
+               df_us$Gender != "Man"] = "Other"
+df_us$Gender = as.factor(df_us$Gender)
+df_us$Gender_check = NULL
+
+# Women might actually pretend to be men???
+
 
 # Turn into single select
 # if multiple chosen, then "Other"
 unlistvar(df_us$Sexuality_check)
 
+df_us$Sexuality %>% unique
+# if only "Prefer not to say", "Straight / Heterosexual", "Bisexual", "Gay or Lesbian" -> no change
+# if include "Prefer to self-describe:", "Queer" -> "Other"
+# else -> "Bisexual" (includes bi and gay and lesbian)
+df_us$Sexuality[sapply(df_us$Sexuality_check, function(z)
+  as.logical(sum(
+    c("Queer", "Prefer to self-describe:") %in% z
+  )))] = "Other"
+df_us$Sexuality[df_us$Sexuality != "Prefer not to say" &
+                  df_us$Sexuality != "Straight / Heterosexual" &
+                  df_us$Sexuality != "Other" &
+                  df_us$Sexuality != "Gay or Lesbian"] = "Bisexual"
+df_us$Sexuality = as.factor(df_us$Sexuality)
+df_us$Sexuality_check = NULL
+
+
+
 # Turn into single select
 # if multiple chosen, then "Multiracial"
-ethnicuniques = unlistvar(df_us$Ethnicity_check)
 
+unlistvar(df_us$Ethnicity_check)
 unique(df_us$Ethnicity)  # need to collapse
-df_us$Ethnicity_clean = df_us$Ethnicity
-df_us$Ethnicity[233]
 
+# if contain hispan -> hispan
+# if only idk, Or, in your own words: -> other
+# if contains Bi pr Multiracial -> Bi/Multiracial
+# if multiselct -> bi/multiracial
+
+
+ethinicity_helper = function(x) {
+  if ("Hispanic or Latino/a/x" %in% x) {
+    return("Hispanic or Latino/a/x")
+  } else if (length(x) > 1) {
+    return("Bi/Multiracial")
+  } else if ("Biracial" %in% x) {
+    return("Bi/Multiracial")
+  } else if ("Multiracial" %in% x) {
+    return("Bi/Multiracial")
+  } else if (x %in% c(
+    "Or, in your own words:",
+    "I don't know",
+    "Indigenous (such as Native American, Pacific Islander, or Indigenous Australian)",
+    "Middle Eastern"
+  )) {
+    return("Other")
+  } else {
+    return(x)
+  }
+} # grouped Middle Eastern and Indigenous with Other, bc not enough data points
+
+df_us$Ethnicity %>% unique
+df_us$Ethnicity = sapply(df_us$Ethnicity_check, ethinicity_helper)
+table(df_us$Ethnicity)
+# count of list
+sapply(df_us$Ethnicity_check, length) %>% table()
+df_us$Ethnicity = as.factor(df_us$Ethnicity)
+df_us$Ethnicity_check = NULL
+
+# df_us$Ethnicity_clean = df_us$Ethnicity
+# df_us$Ethnicity[233]
 #
 # if (is.element("Multiracial", df_us$Ethnicity_clean) {
 #   df_us$Ethnicity_clean = "Multiracial"
 # }
-# 
-# 
+#
 # for item in df_us$Ethnicity_check{
 #   if ("Multiracial" %in% df_us$Ethnicity_clean) {
 #     Ethnicity_clean[[item]] = "Multiracial")
 #   }
 # }
-
 #
 # for j in 1:dim(df_us)[1] {
 #   if (is.element("Multiracial", df$Ethnicity_clean[j])) {
 #     df$Ethnicity_clean[j] = "Multiracial"}}
-
+#
 
 # Turn into single select
 unlistvar(df_us$Accessibility_check)
-handicap = c("I am unable to / find it difficult to walk or stand without assistance",
-             "Or, in your own words:",
-             "I am deaf / hard of hearing",
-             "I am blind / have difficulty seeing",
-             "I am unable to / find it difficult to type")
+handicap = c(
+  "I am unable to / find it difficult to walk or stand without assistance",
+  "Or, in your own words:",
+  "I am deaf / hard of hearing",
+  "I am blind / have difficulty seeing",
+  "I am unable to / find it difficult to type"
+)
+df_us$Accessibility[df_us$Accessibility != "Prefer not to say" &
+                      df_us$Accessibility != "None of the above"] = "Handicapped"
+df_us$Accessibility = as.factor(df_us$Accessibility)
+df_us$Accessibility_check = NULL
+
 
 # Turn into single select
-unlistvar(df_us$MentalHealth_check)
-mentally_unhealthy = c("I have a concentration and/or memory disorder (e.g. ADHD)",
-                       "I have an anxiety disorder",
-                       "I have a mood or emotional disorder (e.g. depression, bipolar disorder)",
-                       "I have autism / an autism spectrum disorder (e.g. Asperger's)",
-                       "Or, in your own words:")
+unlistvar(df_us$MentalHealth_check) 
+mentally_unhealthy = c(
+  "I have a concentration and/or memory disorder (e.g. ADHD)",
+  "I have an anxiety disorder",
+  "I have a mood or emotional disorder (e.g. depression, bipolar disorder)",
+  "I have autism / an autism spectrum disorder (e.g. Asperger's)",
+  "Or, in your own words:"
+)
+df_us$MentalHealth[df_us$MentalHealth != "Prefer not to say" &
+                      df_us$MentalHealth != "None of the above"] = "Suffer Mental Health Disorder(s)"
+df_us$MentalHealth = as.factor(df_us$MentalHealth)
+df_us$MentalHealth_check = NULL
+
 
 
 
@@ -411,20 +578,35 @@ mentally_unhealthy = c("I have a concentration and/or memory disorder (e.g. ADHD
 # 5 variables from this. if these words show up in my list, then mark as 1
 # is.element function if else
 
-df_us$devtyp2 = lapply(df_us$DevType, strsplit, split = ";")
-uniq_devtypes = df_us$devtyp2 %>% unlist %>% unique
-
-for (udt in uniq_devtypes) {
-  df_us[[udt]] = sapply(df_us$devtyp2, function(z)
-    udt %in% z[[1]])
-  df_us[[udt]] %<>% as.numeric
-}
-
-
 # TO PREDICT LEADERSHIP, WE NEED TO LOOK AT PROGRESS
 # look at how quickly you progress to get to leadership
 
 
+
+
+############################## DEAL WITH N/AS ##################################
+
+############## Examine N/As ##############
+sapply(df_us, function(z)
+  (sum(is.na(z)) / length(z)))*100
+sapply(df_us, function(z)
+  sum(is.na(z)))
+
+############## DROP/IMPUTE N/As ##############
+# TODO: look into imputations later
+df_us = df_us %>% drop_na()
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
 ############################# COUNTRIES APPROACH ###############################
 
 # drop location first for analysis, will get back to this
@@ -433,11 +615,11 @@ state_level = c("US_State", "UK_Country")
 df_world[state_level] = NULL
 
 
-############################## CHOOSE ONE OF TWO ###############################
+################################################################################
+######################### CHOOSE ONE OF TWO APPROACHES #########################
 
 # For now, I will go with the U.S. dataset
 df = df_us
 
 # keep only complete data points not counting for location
-
-saveRDS(df, "../20_intermediate_files/clean_data_set.rds")
+saveRDS(df, "../20_intermediate_files/clean_USdata.rds")
