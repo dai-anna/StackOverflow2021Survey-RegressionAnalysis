@@ -98,8 +98,9 @@ convertcurrency = function(x, from, to) {
 
 # count of foreign currencies: only 7 people reported foreign currencies
 
-df_us %>% filter(Currency != "USD\tUnited States dollar") %>% count
 df_us %>% filter(Currency != "USD\tUnited States dollar")
+df_us %>% filter(Currency != "USD\tUnited States dollar") %>% count
+
 # Looking at the different salaries, it looks like the UGX is most like mistyped USD as they are next to each other in the survey
 outlier_index = df_us[df_us$Currency == "UGX\tUgandan shilling", c("ConvertedCompYearly", "CompTotal", "Currency")] %>% rownames
 df_us[df_us$Currency ==
@@ -173,7 +174,6 @@ df_us$ConvertedCompYearly[df_us$compcompare == FALSE &
 
 sum(is.na(df_us$ConvertedCompYearly))
 
-
 ############## Plot the outcome ###############
 ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
 # OH DEAR OH DEAR
@@ -205,25 +205,64 @@ table(df_us$US_State) # ok - state with least input is 2
 
 ####################### SINGLE SELECTION FACTOR VARIABLES ######################
 
+df_us[df_us$Currency != "USD\tUnited States dollar",]["Currency"] %>% unique
+# consolidated to "Other"
+ #              ZMW Zambian kwacha
+ #               LSL\tLesotho loti
+ #             GBP\tPound sterling
+ #         TZS\tTanzanian shilling
+ #              AMD\tArmenian dram
+ #           KRW\tSouth Korean won
+ #       none\tCook Islands dollar
+ #      KYD\tCayman Islands dollar
+ #               JPY\tJapanese yen
+ #             ARS\tArgentine peso
+ #            CAD\tCanadian dollar
+ #             UYU\tUruguayan peso
+ #             BRL\tBrazilian real
+ # AED United Arab Emirates dirham
+ #              AWG\tAruban florin
+ #             ERN\tEritrean nakfa
+
+df_us[df_us$Currency != "USD\tUnited States dollar",]["Currency"] = "Other Currency"
 df_us$Currency = as.factor(df_us$Currency)
 
+
 # Ordinal? Factor Variables
+# Tried out ordinal encoding but invalid due to "Prefer not to say" and uneven age increase
+
+
+# df_us$EdLevel = factor(
+#   df_us$EdLevel,
+#   order = TRUE,
+#   levels = c(
+#     "Primary/elementary school",
+#     "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)",
+#     "Some college/university study without earning a degree",
+#     "Associate degree (A.A., A.S., etc.)",
+#     "Bachelor’s degree (B.A., B.S., B.Eng., etc.)",
+#     "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)",
+#     "Professional degree (JD, MD, etc.)",
+#     "Other doctoral degree (Ph.D., Ed.D., etc.)",
+#     "Something else"
+#   )
+# )
+
+# after eda realized not enough data points and can consolidate some variables
 table(df_us$EdLevel)
-df_us$EdLevel = factor(
-  df_us$EdLevel,
-  order = FALSE,
-  levels = c(
-    "Primary/elementary school",
-    "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)",
-    "Some college/university study without earning a degree",
-    "Associate degree (A.A., A.S., etc.)",
-    "Bachelor’s degree (B.A., B.S., B.Eng., etc.)",
-    "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)",
-    "Professional degree (JD, MD, etc.)",
-    "Other doctoral degree (Ph.D., Ed.D., etc.)",
-    "Something else"
-  )
-)
+df_us$EdLevel[df_us$EdLevel %in% c(
+  "Primary/elementary school",
+  "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)"
+  )] = "Primary or Secondary School"
+df_us$EdLevel[df_us$EdLevel %in% c(
+  "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)",
+  "Professional degree (JD, MD, etc.)"
+  )] = "Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)"
+df_us$EdLevel = as.factor(df_us$EdLevel)
+df_us = df_us %>% mutate(EdLevel = relevel(EdLevel, "Primary or Secondary School"))
+
+
+
 table(df_us$OrgSize)
 df_us$OrgSize = factor(
   df_us$OrgSize,
@@ -242,21 +281,33 @@ df_us$OrgSize = factor(
   )
 )
 
+# Indeed: small company: 1-100 employees; medium-sized company: 101-999 employees; large company: 1,000 or more employees.
+
+
+# df_us$Age = factor(
+#   df_us$Age,
+#   order = TRUE,
+#   levels = c(
+#     "Under 18 years old",
+#     "18-24 years old",
+#     "25-34 years old",
+#     "35-44 years old",
+#     "45-54 years old",
+#     "55-64 years old",
+#     "65 years or older",
+#     "Prefer not to say"
+#   )
+# )
+
 table(df_us$Age)
-df_us$Age = factor(
-  df_us$Age,
-  order = FALSE,
-  levels = c(
-    "Under 18 years old",
-    "18-24 years old",
-    "25-34 years old",
-    "35-44 years old",
-    "45-54 years old",
-    "55-64 years old",
-    "65 years or older",
-    "Prefer not to say"
-  )
-)
+# after eda realized not enough data points and can consolidate some variables
+df_us$Age[df_us$Age %in% c("Under 18 years old", "18-24 years old")] = "Under 24 years old"
+df_us$Age[df_us$Age %in% c("55-64 years old", "65 years or older")] = "55 years or older"
+df_us$Age = as.factor(df_us$Age)
+levels(df_us$Age)
+df_us = df_us %>% mutate(Age = relevel(Age, "Under 24 years old"))
+
+
 
 # Factor Variable
 table(df_us$Trans)
@@ -283,6 +334,7 @@ df_us$YearsCodeProNum = as.numeric(df_us$YearsCodeProNum)
 hist(df_us$YearsCodeProNum)
 hist(log(df_us$YearsCodeProNum))
 
+################### CONVERT MULTISELECT TO MULTI-HOT-ENCODED ###################
 
 # Multi-select variables
 # unique(df_us$LearnCode) # need to collapse
@@ -293,8 +345,6 @@ hist(log(df_us$YearsCodeProNum))
 # unique(df_us$Accessibility)  # turn into single choice
 # unique(df_us$MentalHealth)  # turn into single choice
 
-
-################### CONVERT MULTISELECT TO MULTI-HOT-ENCODED ###################
 
 # First convert to list and unlist to see unique variables
 listvar = function(col) {
@@ -370,7 +420,7 @@ for (uq in unlistvar(df_us$LearnCode_list)) {
 
 df_us[25:36,]
 
-df_us[!is.na(df_us$LearnCode_list), c("Online Resources",
+df_us[is.na(df_us$LearnCode_list), c("Online Resources",
                                      "School",
                                      "Peers",
                                      "Other",
@@ -425,6 +475,8 @@ for (uq in unlistvar(df_us$DevType_list)) {
   }
 }
 
+df_us[28:39,]
+
 df_us[is.na(df_us$DevType_list), c(
   "Software Development",
   "Data Science",
@@ -457,7 +509,7 @@ df_us$Gender[df_us$Gender != "Prefer not to say" &
                df_us$Gender != "Man"] = "Other"
 df_us$Gender = as.factor(df_us$Gender)
 df_us$Gender_check = NULL
-
+table(df_us$Gender)
 # Women might actually pretend to be men???
 
 
@@ -521,7 +573,9 @@ table(df_us$Ethnicity)
 # count of list
 sapply(df_us$Ethnicity_check, length) %>% table()
 df_us$Ethnicity = as.factor(df_us$Ethnicity)
+df_us = df_us %>% mutate(Ethnicity = relevel(Ethnicity, "White or of European descent"))
 df_us$Ethnicity_check = NULL
+
 
 # df_us$Ethnicity_clean = df_us$Ethnicity
 # df_us$Ethnicity[233]
@@ -592,25 +646,13 @@ sapply(df_us, function(z)
 sapply(df_us, function(z)
   sum(is.na(z)))
 
-############## DROP/IMPUTE N/As ##############
-# TODO: look into imputations later
-df_us = df_us %>% drop_na()
-
-
-
-
-
-
-
-
-
 
 
 ################################################################################
 ############################# COUNTRIES APPROACH ###############################
 
 # drop location first for analysis, will get back to this
-df_world = readRDS("../20_intermediate_files/initial_data_set.rds")
+# df_world = readRDS("../20_intermediate_files/initial_data_set.rds")
 state_level = c("US_State", "UK_Country")
 df_world[state_level] = NULL
 

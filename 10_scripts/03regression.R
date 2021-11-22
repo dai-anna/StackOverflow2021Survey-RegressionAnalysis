@@ -7,6 +7,10 @@ library(dplyr)
 library(tidyr)
 library(magrittr)
 library(kableExtra)
+library(car)
+library(lme4)
+library(arrow)
+
 
 ################################################################################
 ############################### 0. LOADING THE DATA ############################
@@ -111,10 +115,10 @@ dropcols = c("LearnCode","YearsCode","YearsCodePro","DevType")
 df[dropcols] = NULL
 df = df %>% drop_na()
 
+############################## LINEAR MODEL FITTING ############################
 
 # Model selection
-# Step AIC:
-null_model = lm(logConvertedCompYearly ~ 1 , data=df)
+null_model = lm(logConvertedCompYearly ~ Gender + Ethnicity , data=df)
 full_model = lm(
   logConvertedCompYearly ~ `EdLevel` +
     `Age1stCode` +
@@ -127,7 +131,7 @@ full_model = lm(
     `Ethnicity` +
     `Accessibility` +
     `MentalHealth` +
-    `YearsCodeNum` +
+    # `YearsCodeNum` + highly correlated with YearsCodeProNum
     `YearsCodeProNum` +
     `Online Resources` +
     `School` +
@@ -145,18 +149,58 @@ full_model = lm(
 )
 summary(full_model)
 
-#Backward selection
-step_model = step(null_model, scope = formula(full_model), direction = 'both', trace=0)
-summary(step_model)
+#AIC stepwise selection
+# step_model = step(null_model, scope = formula(full_model), direction = 'both', trace=0)
+# summary(step_model)
+
+#AIC forward selection 
+# step_model = step(null_model, scope = formula(full_model), direction = 'forward', trace=0)
+# summary(step_model) # similar to stepwise
+
+#AIC backward selection
+# step_model = step(null_model, scope = formula(full_model), direction = 'backward', trace=0)
+# summary(step_model) # kicks out everything
 
 
+n=nrow(df)
+#BIC stepwise selection
+step_model = step(null_model, scope = list(upper=full_model, lower=null_model), direction = 'both', trace=0, k=log(n))
+summary(step_model) # more parsimonious than AIC, slightly worse R^2 (0.4) -> CHOSEN ONE
+AIC(step_model)
+
+# Transform to original scale
+coef = data.frame(exp(step_model$coefficients))
+cf = data.frame(exp(confint(step_model)))
+summaryprint = round(cbind(coef, cf),4)
+summaryprint
+
+# Significant Variables:
+# Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency
+
+
+# #BIC stepwise selection
+# step_model = step(null_model, scope = formula(full_model), direction = 'forward', trace=0, k=log(n))
+# summary(step_model) # similar to stepwise
+
+
+############################# LINEAR MODEL ASSESSMENT ##########################
 
 par(bty='n')
 plot(step_model, which=1)                       # equal variance and independence assum problem
-plot(step_model, which=2)                       # normality assumption?
+plot(step_model, which=2)                       # OOOOOUUFFF
 plot(step_model, which=3)
-plot(step_model, which=4)                       # no influential points
-plot(step_model, which=5)                       # several outliers
+plot(step_model, which=4)                       # no influential points?
+plot(step_model, which=5)                       # several outliers but not influential
 plot(df$YearsCodeNum, step_model$residuals)     # linearity assumption holds
 plot(df$YearsCodeProNum, step_model$residuals)
-vif(step_model)                
+vif(step_model)           
+
+########################### HIERARCHICAL MODEL FITTING #########################
+
+# Level = State (random intercept)
+step_model = lm(null_model, scope = list(upper=full_model, lower=null_model), direction = 'both', trace=0, k=log(n))
+randint_model <- lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (1 | US_State), data = df)
+summary(randint_model) 
+AIC(randint_model)
+
+anova(step_model,randint_model) 
