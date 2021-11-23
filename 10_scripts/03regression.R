@@ -97,8 +97,6 @@ table(df$Accessibility)
 ggplot(data=df, aes(x=MentalHealth, y=logConvertedCompYearly)) + geom_boxplot() #*
 table(df$MentalHealth)
 
-# Look at groups of binary predictors
-
 
 # Look at hierarchical predictor
 ggplot(data=df, aes(x=US_State, y=logConvertedCompYearly)) + geom_boxplot() # different -> random intercepts
@@ -166,7 +164,7 @@ n=nrow(df)
 #BIC stepwise selection
 step_model = step(null_model, scope = list(upper=full_model, lower=null_model), direction = 'both', trace=0, k=log(n))
 summary(step_model) # more parsimonious than AIC, slightly worse R^2 (0.4) -> CHOSEN ONE
-AIC(step_model)
+AIC(step_model) #11240.94
 
 # Transform to original scale
 coef = data.frame(exp(step_model$coefficients))
@@ -175,12 +173,84 @@ summaryprint = round(cbind(coef, cf),4)
 summaryprint
 
 # Significant Variables:
-# Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency
+# Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + 
+# `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + 
+# School + Research + Currency
 
 
 # #BIC stepwise selection
 # step_model = step(null_model, scope = formula(full_model), direction = 'forward', trace=0, k=log(n))
 # summary(step_model) # similar to stepwise
+
+################################# INTERACTIONS #################################
+# Look at groups of binary predictors
+ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~Gender, ncol=4)  #*
+
+ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~`Senior Executive (C-Suite, VP, etc.)`, ncol=4) #**
+
+ggplot(df, aes(x=Gender, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~`Senior Executive (C-Suite, VP, etc.)`, ncol=4) #**
+
+ggplot(df, aes(x=Age, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~`Senior Executive (C-Suite, VP, etc.)`, ncol=4) #*
+
+# Look at predictors by state
+# sample 20 states to look at 
+# df_sample = df$US_State
+ggplot(df, aes(x=Gender, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~`US_State`, ncol=4) #*
+
+ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
+  geom_boxplot() +
+  facet_wrap(~`US_State`, ncol=4) #*
+
+# Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + 
+# `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + 
+# School + Research + Currency
+
+
+
+
+interact_model = lm(
+  logConvertedCompYearly ~ Gender + 
+    Ethnicity + 
+    YearsCodeProNum + 
+    Age + 
+    OrgSize + 
+    EdLevel + 
+    `Senior Executive (C-Suite, VP, etc.)` + 
+    `DevOps and Admin` + 
+    School + 
+    Research + 
+    Currency + 
+    `Senior Executive (C-Suite, VP, etc.)`*Ethnicity + 
+    `Senior Executive (C-Suite, VP, etc.)`*Gender + 
+    `Senior Executive (C-Suite, VP, etc.)`*Age,
+  data = df
+)
+
+stepint_model = step(null_model, scope = list(upper=interact_model, lower=null_model), direction = 'both', trace=0, k=log(n))
+summary(stepint_model) #nochange
+
+########################## Pretty table & plot below ###########################
+
+summary_step = summary(stepint_model)
+summaryprint = data.frame(summary_step$coefficients)
+colnames(summaryprint) = c("Estimate","Std. Error","t value", "Pr(>|t|)")
+knitr::kable(summaryprint, format="latex", booktabs=TRUE) %>% 
+  kable_styling(latex_options=c("hold_position"))
+
+
+plot(stepint_model, which=1, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
+plot(stepint_model, which=2, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
+plot(stepint_model, which=5, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
 
 
 ############################# LINEAR MODEL ASSESSMENT ##########################
@@ -198,9 +268,47 @@ vif(step_model)
 ########################### HIERARCHICAL MODEL FITTING #########################
 
 # Level = State (random intercept)
-step_model = lm(null_model, scope = list(upper=full_model, lower=null_model), direction = 'both', trace=0, k=log(n))
+step_model = lm(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency, data = df)
 randint_model <- lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (1 | US_State), data = df)
-summary(randint_model) 
-AIC(randint_model)
+randint_summary = summary(randint_model) 
+AIC(randint_model) #10.94
 
-anova(step_model,randint_model) 
+anova(randint_model, step_model) 
+xtable(anova(randint_model, step_model))
+
+randslope_model1 <- lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Ethnicity | US_State), data = df)
+anova(randslope_model1, randint_model) 
+
+predict(randint_model)
+
+############################# Pretty table below ###############################
+
+summary_step = summary(randint_model)
+summaryprint = data.frame(summary_step$coefficients)[1:2]
+summaryexpprint = data.frame(exp(summary_step$coefficients))[1:2]
+confprint = data.frame(exp(confint(randint_model)))[3:40,]
+
+summarydf = data.frame(round(cbind(summaryprint, summaryexpprint, confprint),4))
+colnames(summarydf) = c("Estimate","Std. Error","Estimate(Exp)","Std. Error(Exp)","2.5%(Exp)","97.5%(Exp)")
+knitr::kable(summarydf, format="latex", booktabs=TRUE) %>% 
+  kable_styling(latex_options=c("hold_position", "scale_down"))
+
+dotplot(ranef(randint_model))
+
+ranefprint = data.frame(randint_summary$varcor)
+ranefprint = ranefprint[,-3]
+ranefprint[is.na(ranefprint)] = ""
+ranefprint[,3:4] = round(ranefprint[,3:4],4)
+colnames(ranefprint) = c("Groups","Name","Variance","Std.Dev.")
+
+knitr::kable(ranefprint, format="latex", booktabs=TRUE) %>% 
+  kable_styling(latex_options=c("hold_position"))
+
+############################## Export for python ###############################
+# State-level random intercept plot
+x = ranef(randint_model, condVar=TRUE)$US_State
+xdf = data.frame(pointest=ranef(randint_model, condVar=TRUE)$US_State, err=as.vector(sqrt(attr(x, "postVar"))))
+xdf$pointestimate = xdf$X.Intercept.
+xdf$state = rownames(xdf)
+xdf$X.Intercept. = NULL
+write_parquet(xdf, "../20_intermediate_files/ranef_randint_bystate.parquet")
