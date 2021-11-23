@@ -65,28 +65,3 @@ ax.set_yticklabels([])
 ax.set_xticks([])
 ax.set_yticks([])
 # %%
-
-
-df = pd.read_parquet("~/Downloads/20_outputs/all_shipments_yearly.parquet")
-df.buyer_state.unique()
-df.head()
-
-# %%
-
-df = pd.read_parquet("~/Downloads/20_outputs/all_shipments_FL_yearly.parquet")
-df.buyer_state.unique()
-df.head()
-
-
-# %%
-
-df = pd.read_parquet("~/Downloads/20_outputs/all_shipments_WA_yearly.parquet")
-df.buyer_state.unique()
-df.head()
-
-# %%
-df = pd.read_parquet("~/Downloads/20_outputs/arcos-wa-statewide-itemized-singlefile.parquet")
-df.head()
-
-
-# %%
