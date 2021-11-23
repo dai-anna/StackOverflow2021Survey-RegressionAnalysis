@@ -2,6 +2,8 @@
 .DS_Store
 .Rhistory
 survey_results_public.csv
+test*
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
