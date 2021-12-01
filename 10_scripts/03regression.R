@@ -25,7 +25,7 @@ summary(df)
 colnames(df)
 
 # factor_cols = c("US_State", "EdLevel", "OrgSize", "Age", "Gender", "Trans","Sexuality", "Ethnicity", "Accessibility", "MentalHealth") 
-# df[factor_cols] <- lapply(df[factor_cols], factor)
+# df[factor_cols] = lapply(df[factor_cols], factor)
 
 ################################################################################
 ################################## 1. EDA ######################################
@@ -33,7 +33,7 @@ colnames(df)
 
 ################### EXPLORE LOGISTIC REGRESSION ON "LEADER" ####################
 # 
-# cond_prob <- function (df, col1, col2) {
+# cond_prob = function (df, col1, col2) {
 #   round(apply(table(df[, c(col1, col2)])/sum(table(df[, c(col1, col2)])),
 #               2,function(x) x/sum(x)), 2)
 # }
@@ -267,35 +267,63 @@ vif(step_model)
 
 ########################### HIERARCHICAL MODEL FITTING #########################
 
-# Level = State (random intercept)
+# Level = State (random intercept) ***
 step_model = lm(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency, data = df)
-randint_model <- lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (1 | US_State), data = df)
+randint_model = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (1 | US_State), data = df)
 randint_summary = summary(randint_model) 
 AIC(randint_model) #10.94
 
 anova(randint_model, step_model) 
 xtable(anova(randint_model, step_model))
 
-randslope_model1 <- lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Ethnicity | US_State), data = df)
+# Level = State (random intercept + random slope by Ethnicity) NS
+randslope_model1 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Ethnicity | US_State) + (1 | US_State), data = df)
 anova(randslope_model1, randint_model) 
 
-predict(randint_model)
+# Level = State (random intercept + random slope by Gender) NS
+randslope_model2 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Gender | US_State) + (1 | US_State), data = df)
+anova(randslope_model2, randint_model) 
+
+# Level = State (random intercept + random slope by OrgSize) 0.009727** 
+# CHOSEN ONE
+randslope_model3 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (OrgSize | US_State) + (1 | US_State), data = df)
+anova(randslope_model3, randint_model) 
+
+# Level = State (random intercept + random slope by YearsCodeProNum) 0.04895*
+randslope_model4 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (YearsCodeProNum | US_State) + (1 | US_State), data = df)
+anova(randslope_model4, randint_model) 
+
+# Level = State (random intercept + random slope by Age) NS
+randslope_model5 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Age | US_State) + (1 | US_State), data = df)
+anova(randslope_model5, randint_model) 
+
+# Level = State (random intercept + random slope by EdLevel) NS
+randslope_model6 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (EdLevel | US_State) + (1 | US_State), data = df)
+anova(randslope_model6, randint_model) 
+
+# Level = State (random intercept + random slope by `Senior Executive (C-Suite, VP, etc.)`) 0.02756*
+randslope_model7 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (`Senior Executive (C-Suite, VP, etc.)` | US_State) + (1 | US_State), data = df)
+anova(randslope_model7, randint_model) 
+
+final_model = randslope_model3 
+summary(final_model)
+predict(final_model)
 
 ############################# Pretty table below ###############################
 
-summary_step = summary(randint_model)
+summary_step = summary(final_model)
 summaryprint = data.frame(summary_step$coefficients)[1:2]
 summaryexpprint = data.frame(exp(summary_step$coefficients))[1:2]
-confprint = data.frame(exp(confint(randint_model)))[3:40,]
+confprint = data.frame(exp(confint(final_model)))[3:40,]
 
 summarydf = data.frame(round(cbind(summaryprint, summaryexpprint, confprint),4))
 colnames(summarydf) = c("Estimate","Std. Error","Estimate(Exp)","Std. Error(Exp)","2.5%(Exp)","97.5%(Exp)")
 knitr::kable(summarydf, format="latex", booktabs=TRUE) %>% 
   kable_styling(latex_options=c("hold_position", "scale_down"))
 
-dotplot(ranef(randint_model))
+dotplot(ranef(final_model))
 
-ranefprint = data.frame(randint_summary$varcor)
+ranefprint = data.frame(final_summary$varcor)
 ranefprint = ranefprint[,-3]
 ranefprint[is.na(ranefprint)] = ""
 ranefprint[,3:4] = round(ranefprint[,3:4],4)
