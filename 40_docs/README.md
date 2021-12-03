@@ -1,1 +1,0 @@
-This directory contains the results from the analysis.

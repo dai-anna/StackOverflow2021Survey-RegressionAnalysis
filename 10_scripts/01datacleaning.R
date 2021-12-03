@@ -114,8 +114,8 @@ df_us[outlier_index,]
 # this is less than half of the lower bound of full-time developer salary according to our research
 # 15 people heavily skews our distribution and entirely out of "normal" range, so we will drop them
 sum(is.na(df_us$ConvertedCompYearly))
-
-lower_bound_check = quantile(df_us$ConvertedCompYearly, 0.002, na.rm = TRUE)
+#*************************TRY 0.25% instead of 0.2%%*******************************#
+lower_bound_check = quantile(df_us$ConvertedCompYearly, 0.0025, na.rm = TRUE)
 lower_bound_check
 
 df_us %>% filter(ConvertedCompYearly < lower_bound_check) %>% count
@@ -130,7 +130,7 @@ ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
 # this is more than double the upper bound of full-time developer salary according to our research
 
 upper_bound_check = quantile(df_us$ConvertedCompYearly, 0.975, na.rm = TRUE) ##### <<<<<<<<< .95 to use top 5% cutoff
-upper_bound_check # this is already much higher than the
+upper_bound_check # this is already much higher than the lower bound of the yearly comp
 df_check = df_us %>%
   filter(!compcompare) %>%
   filter(ConvertedCompYearly >= upper_bound_check) %>%
@@ -140,13 +140,20 @@ df_check = df_us %>%
     "ConvertedCompYearly",
     "Currency",
     "compcompare"
-  )) # this yield 272 observations to check closely (where compfreq is not "Yearly")
+  )) # this yield 272 observations to check closely (where compfreq is likely not "Yearly")
 #184 observations for 2.5%
-# at 5%                                               # at 2.5%
-min(df_check$CompTotal) # $11,000, could be weekly/monthly                    $41,250 highly unlikely to be weekly/monthly
-max(df_check$CompTotal) # $850,000, probably mistake                          #850,000 Definitely mistake
-min(df_check$ConvertedCompYearly) #550,000, could be true                     $1,560,000 highly improbable
-max(df_check$ConvertedCompYearly) #21,822,250, which is definitely not real   $21,822,250 definitely mistake or troll
+######################### at 5%                                               # at 2.5% CHOSEN                                # at 3.5%
+min(df_check$CompTotal) # $11,000, could be weekly/monthly                    $41,250 highly unlikely to be weekly/monthly    $22,000
+max(df_check$CompTotal) # $850,000, definitely mistake                        $850,000 Definitely mistake                     same
+min(df_check$ConvertedCompYearly) #550,000, could be true                     $1,560,000 highly improbable                    $1,020,000
+max(df_check$ConvertedCompYearly) #21,822,250, which is definitely not real   $21,822,250 definitely mistake or troll         same
+
+df_check %>% group_by(CompFreq) %>% summarise(
+  maxcomptotal = max(CompTotal),
+  mincomptotal = min(CompTotal),
+  maxconverted = max(ConvertedCompYearly),
+  minconverted = min(ConvertedCompYearly)
+) %>% arrange(CompFreq)
 
 # we will take lower bound of yearly salary to say, if weekly/monthly salary is > low yearly salary, then it's probably yearly
 # if not, a weekly salary of 36K would be 1,872,000 and a monthly salary of 36K would be 432,000
@@ -181,7 +188,7 @@ ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
 ############## Log to the Rescue ###############
 df_us$logConvertedCompYearly = log(df_us$ConvertedCompYearly)
 ggplot(data = df_us, aes(x = logConvertedCompYearly)) + geom_histogram(bins = 50)  # few large outliers
-# MUCH BETTER -> Issues due to N/As?
+# MUCH BETTER -> Issues due to N/As? No
 
 df_test = data.frame(df_us$ConvertedCompYearly) %>% drop_na()
 df_test$df_us.ConvertedCompYearly
@@ -190,7 +197,7 @@ ggplot(data = df_test, aes(x = log(df_us.ConvertedCompYearly))) + geom_histogram
 
 ################################################################################
 ########################## ADD INTERMEDIATE DATA ###############################
-# saveRDS(df_us, "../20_intermediate_files/clean_response.rds")
+saveRDS(df_us, "../20_intermediate_files/clean_response.rds")
 
 df_us = readRDS("../20_intermediate_files/clean_response.rds")
 drop_cols = c("CompTotal", "CompFreq", "compcompare")
@@ -202,6 +209,7 @@ df_us[drop_cols] = NULL
 
 # Candidate for Hierarchy
 table(df_us$US_State) # ok - state with least input is 2
+df_us$US_State = as.factor(df_us$US_State)
 
 ####################### SINGLE SELECTION FACTOR VARIABLES ######################
 
@@ -649,10 +657,10 @@ sapply(df_us, function(z)
 ################################################################################
 ############################# COUNTRIES APPROACH ###############################
 
-# drop location first for analysis, will get back to this
+# drop location first for analysis, can get back to this at another point
 # df_world = readRDS("../20_intermediate_files/initial_data_set.rds")
-state_level = c("US_State", "UK_Country")
-df_world[state_level] = NULL
+# state_level = c("US_State", "UK_Country")
+# df_world[state_level] = NULL
 
 
 ################################################################################

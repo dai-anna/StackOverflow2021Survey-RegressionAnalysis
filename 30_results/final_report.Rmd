@@ -1,0 +1,31 @@
+---
+title: \vspace{-1.5cm} **StackOverflow 2021 Survey - Regression Analysis**
+author: "Anna Dai"
+date: December 12, 2021
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+library(ggplot2)
+library(readr)
+library(GGally)
+library(texreg)
+library(xtable)
+library(knitr)
+library(kableExtra)
+```
+
+# Summary
+
+# Introduction
+
+# Data
+
+# Model
+
+# Conclusion
