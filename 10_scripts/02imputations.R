@@ -54,8 +54,10 @@ df <- df %>%
          DataScience = `Data Science`,
          DevOps_Admin = `DevOps and Admin`,
          ProductManager = `Product manager`,
-         SeniorExecutives = `Senior Executive (C-Suite, VP, etc.)`,
-         NonTechnical_Other = `Other/Non-Technical`)
+         SeniorExecutive = `Senior Executive (C-Suite, VP, etc.)`,
+         NonTechnicalRole = `Other/Non-Technical`,
+         OtherMethods = Other
+         )
 
 # limit df to the 50 states + DC
 df = df[!(df$US_State == "I do not reside in the United States" |
@@ -94,16 +96,49 @@ if(IWANTTOWAITANOTHER30MIN == TRUE){
   saveRDS(imputed_pmm, "../20_intermediate_files/imputed_ppm.rds")
 }
 
+
+################################################################################
+########################## 2. Assessing the imputations ########################
+################################################################################
+
+
 # Assess norm imputations
 imputed_norm = readRDS("../20_intermediate_files/imputed_norm.rds")
 # stripplot(imputed_norm, col=c("grey","darkred"),pch=c(1,20)) # this is fine, too slow to rerun
 # densityplot(imputed_norm) # this is fine, too slow to rerun
 
-xyplot(imputed_norm, ConvertedCompYearly ~ YearsCodeProNum | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_norm, ConvertedCompYearly ~ Gender | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_norm, ConvertedCompYearly ~ Ethnicity | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_norm, ConvertedCompYearly ~ OrgSize | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-
+xyplot(
+  imputed_norm,
+  ConvertedCompYearly ~ YearsCodeProNum |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_norm,
+  ConvertedCompYearly ~ Gender |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_norm,
+  ConvertedCompYearly ~ Ethnicity |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_norm,
+  ConvertedCompYearly ~ OrgSize |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
 
 
 # Assess pmm imputations
@@ -111,9 +146,38 @@ imputed_pmm = readRDS("../20_intermediate_files/imputed_ppm.rds")
 # stripplot(imputed_pmm, col=c("grey","darkred"),pch=c(1,20)) # this is fine, too slow to rerun
 # densityplot(imputed_pmm) # this is fine, too slow to rerun
 
-xyplot(imputed_pmm, ConvertedCompYearly ~ YearsCodeProNum | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_pmm, ConvertedCompYearly ~ Gender | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_pmm, ConvertedCompYearly ~ Ethnicity | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
-xyplot(imputed_pmm, ConvertedCompYearly ~ OrgSize | .imp,pch=c(1,20),cex = 1.4,col=c("grey","darkred"))
+xyplot(
+  imputed_pmm,
+  ConvertedCompYearly ~ YearsCodeProNum |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_pmm,
+  ConvertedCompYearly ~ Gender |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_pmm,
+  ConvertedCompYearly ~ Ethnicity |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
+xyplot(
+  imputed_pmm,
+  ConvertedCompYearly ~ OrgSize |
+    .imp,
+  pch = c(1, 20),
+  cex = 1.4,
+  col = c("grey", "darkred")
+)
 
 
+# Overall I find my imputations look good and representative of my data
