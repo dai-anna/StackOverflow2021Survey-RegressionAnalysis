@@ -8,6 +8,8 @@ library(tidyr)
 library(magrittr)
 library(kableExtra)
 library(car)
+library(broom.mixed)
+library(mice)
 library(lme4)
 library(arrow)
 
@@ -476,12 +478,77 @@ randslope_model7 = lmer(
 anova(randslope_model7, randint_model) 
 
 final_model = randslope_model5 
+vif(final_model)
 summary(final_model)
 predict(final_model)
 
 ################################################################################
 ############################## 3. POOL IMPUTATIONS #############################
 ################################################################################
+
+###################### JOINING ALL IMP DATA SETS INTO ONE ######################
+
+df_complete = complete(imputed_norm, "all")
+
+# Drop unused columns
+df_complete[dropcols] = NULL
+df_complete$logConvertedCompYearly = log(df_complete$ConvertedCompYearly)
+
+df_complete %>% str
+
+# convert logical variables from numeric back to logical
+for (i in colnames(df_complete)) {
+  if (class(df_complete[[i]]) == "numeric") {
+    if (all(df_complete[[i]] == df_complete[[i]]^2)) {
+      df_complete[[i]] = as.logical(df_complete[[i]])
+    }
+  }
+}
+
+# changing baseline for education level to "Masters" as recommended by Tego
+df_complete = df_complete %>% mutate(
+  EdLevel = relevel(
+    EdLevel,
+    "Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)"
+  )
+)
+
+randint_model = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods + 
+    (1 | US_State),
+  data = df_complete
+)
+
+randslope_final = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (Age | US_State), 
+  data = df_complete
+)
+anova(randslope_final, randint_model) 
+summary(randslope_final)
+
+################################ POOL MODELS ###################################
 
 
 imp_model = with(
@@ -498,17 +565,17 @@ imp_model = with(
       School +
       Research +
       OtherMethods +
-      (1 | US_State) +
-      (Age | US_State),
+      (1 | US_State),
     data = df
   )
 )
 
 final_model_pooled = pool(imp_model)
 summary(final_model_pooled)
-
 saveRDS(final_model_pooled, "../20_intermediate_files/final_model.rds")
 
+
+################################################################################
 
 
 ############################# Pretty table below ###############################
