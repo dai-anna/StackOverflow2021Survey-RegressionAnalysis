@@ -59,12 +59,16 @@ df <- df %>%
          OtherMethods = Other
          )
 
-# limit df to the 50 states + DC
+# limit df to the 50 states + DC and change N/A to "Not Provided" - cannot impute
+df$US_State = as.character(df$US_State)
 df = df[!(df$US_State == "I do not reside in the United States" |
             df$US_State == "Guam" |
             df$US_State == "Puerto Rico"), ]
-df$US_State = droplevels(df$US_State)
 table(df$US_State)
+
+df[is.na(df$US_State),"US_State"] = "Not Provided"
+df[is.na(df$US_State),"US_State"] 
+df$US_State = as.factor(df$US_State)
 
 # set to not impute US_State
 m0 <- mice(df, maxit=0)

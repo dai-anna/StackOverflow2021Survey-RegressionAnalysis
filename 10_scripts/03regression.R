@@ -18,11 +18,6 @@ library(arrow)
 
 imputed_norm = readRDS("../20_intermediate_files/imputed_norm.rds")
 
-head(df)
-str(df)
-dim(df)
-summary(df)
-colnames(df)
 
 # factor_cols = c("US_State", "EdLevel", "OrgSize", "Age", "Gender", "Trans","Sexuality", "Ethnicity", "Accessibility", "MentalHealth") 
 # df[factor_cols] = lapply(df[factor_cols], factor)
@@ -36,6 +31,11 @@ colnames(df)
 df = complete(imputed_norm, 1); df # just going to look at the first one
 df$logConvertedCompYearly = log(df$ConvertedCompYearly)
 
+head(df)
+str(df)
+dim(df)
+summary(df)
+colnames(df)
 
 ################### EXPLORE LOGISTIC REGRESSION ON "LEADER" ####################
 # 
@@ -185,7 +185,7 @@ n=nrow(df)
 #BIC stepwise selection
 step_model = step(null_model, scope = list(upper=full_model, lower=null_model), direction = 'both', trace=0, k=log(n))
 summary(step_model) # more parsimonious than AIC, slightly worse R^2 (0.4) -> CHOSEN ONE
-AIC(step_model) #13570.84
+AIC(step_model) #13300.32
 
 # Transform to original scale
 coef = data.frame(exp(step_model$coefficients))
@@ -269,14 +269,16 @@ interact_model = lm(
     OtherMethods +
     SeniorExecutive:Ethnicity +
     SeniorExecutive:Gender +
-    SeniorExecutive:Age,
+    SeniorExecutive:Age +
+    SeniorExecutive:OrgSize + 
+    Ethnicity:YearsCodeProNum + 
+    Gender:YearsCodeProNum +
+    OrgSize:YearsCodeProNum,
   data = df
 )
 
 stepint_model = step(null_model, scope = list(upper=interact_model, lower=null_model), direction = 'both', trace=0, k=log(n))
 summary(stepint_model) #nochange
-
-
 
 ########################## Pretty table & plot below ###########################
 
@@ -286,11 +288,9 @@ colnames(summaryprint) = c("Estimate","Std. Error","t value", "Pr(>|t|)")
 knitr::kable(summaryprint, format="latex", booktabs=TRUE) %>% 
   kable_styling(latex_options=c("hold_position"))
 
-
 plot(stepint_model, which=1, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
 plot(stepint_model, which=2, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
 plot(stepint_model, which=5, pch=16, col='#061953', cex=0.8, sub="", frame.plot=FALSE)
-
 
 ############################# LINEAR MODEL ASSESSMENT ##########################
 
@@ -339,51 +339,175 @@ randint_model = lmer(
 )
 
 randint_summary = summary(randint_model) 
-AIC(randint_model) #13076.19
-
-#**************************** DOES NOT WORK BELOW ******************************
+AIC(randint_model) #13033.81
 
 anova(randint_model, step_model) 
 xtable(anova(randint_model, step_model))
 
+
 # Level = State (random intercept + random slope by Ethnicity) NS
-randslope_model1 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Ethnicity | US_State) + (1 | US_State), data = df)
+randslope_model1 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods + 
+    (1 | US_State) + 
+    (Ethnicity | US_State),
+  data = df
+)
 anova(randslope_model1, randint_model) 
 
 # Level = State (random intercept + random slope by Gender) NS
-randslope_model2 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Gender | US_State) + (1 | US_State), data = df)
+randslope_model2 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) +
+    (Gender | US_State),
+  data = df
+)
 anova(randslope_model2, randint_model) 
 
-# Level = State (random intercept + random slope by OrgSize) 0.009727** 
-# CHOSEN ONE
-randslope_model3 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (OrgSize | US_State) + (1 | US_State), data = df)
+# Level = State (random intercept + random slope by OrgSize) *** 
+# MOST SIGNIFICANT BUT WARNING => did not converge?
+randslope_model3 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (OrgSize | US_State), 
+  data = df)
 anova(randslope_model3, randint_model) 
 
-# Level = State (random intercept + random slope by YearsCodeProNum) 0.04895*
-randslope_model4 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (YearsCodeProNum | US_State) + (1 | US_State), data = df)
+# Level = State (random intercept + random slope by YearsCodeProNum) 0.01044 *
+randslope_model4 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (YearsCodeProNum | US_State), 
+  data = df)
 anova(randslope_model4, randint_model) 
 
-# Level = State (random intercept + random slope by Age) NS
-randslope_model5 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (Age | US_State) + (1 | US_State), data = df)
+# Level = State (random intercept + random slope by Age) 0.002854 **
+# CHOSEN ONE
+randslope_model5 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (Age | US_State), 
+  data = df)
 anova(randslope_model5, randint_model) 
 
 # Level = State (random intercept + random slope by EdLevel) NS
-randslope_model6 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (EdLevel | US_State) + (1 | US_State), data = df)
+randslope_model6 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (EdLevel | US_State), 
+  data = df)
 anova(randslope_model6, randint_model) 
 
-# Level = State (random intercept + random slope by `Senior Executive (C-Suite, VP, etc.)`) 0.02756*
-randslope_model7 = lmer(logConvertedCompYearly ~ Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + `Senior Executive (C-Suite, VP, etc.)` + `DevOps and Admin` + School + Research + Currency + (`Senior Executive (C-Suite, VP, etc.)` | US_State) + (1 | US_State), data = df)
+# Level = State (random intercept + random slope by `Senior Executive (C-Suite, VP, etc.)`) 0.008111 **
+randslope_model7 = lmer(
+  logConvertedCompYearly ~ Gender +
+    Ethnicity +
+    YearsCodeProNum +
+    Age +
+    OrgSize +
+    EdLevel +
+    SeniorExecutive +
+    DevOps_Admin +
+    School +
+    Research +
+    OtherMethods +
+    (1 | US_State) + 
+    (SeniorExecutive | US_State), 
+  data = df)
 anova(randslope_model7, randint_model) 
 
-final_model = randslope_model3 
+final_model = randslope_model5 
 summary(final_model)
 predict(final_model)
 
+################################################################################
+############################## 3. POOL IMPUTATIONS #############################
+################################################################################
 
 
+imp_model = with(
+  data = imputed_norm,
+  lmer(
+    logConvertedCompYearly ~ Gender +
+      Ethnicity +
+      YearsCodeProNum +
+      Age +
+      OrgSize +
+      EdLevel +
+      SeniorExecutive +
+      DevOps_Admin +
+      School +
+      Research +
+      OtherMethods +
+      (1 | US_State) +
+      (Age | US_State),
+    data = df
+  )
+)
 
+final_model_pooled = pool(imp_model)
+summary(final_model_pooled)
 
-
+saveRDS(final_model_pooled, "../20_intermediate_files/final_model.rds")
 
 
 
