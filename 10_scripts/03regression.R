@@ -10,9 +10,26 @@ library(kableExtra)
 library(car)
 library(broom.mixed)
 library(mice)
+library(miceadds)
+library(sirt)
 library(lme4)
 library(arrow)
 
+
+########################### TO EXPLORE MICEADDS LATER ##########################
+
+# datlist <- miceadds::datlist_create(datlist)
+# 
+# #** fit lme4 model for all imputed datasets
+# formula <- math ~ hisei + miceadds::gm( books, idschool ) + ( 1 | idschool )
+# models <- list()
+# M <- length(datlist)
+# for (mm in 1:M){
+#   models[[mm]] <- lme4::lmer( formula, data=datlist[[mm]], REML=FALSE)
+# }
+# #** statistical inference
+# res1 <- miceadds::lmer_pool(models)
+# summary(res1)
 
 ################################################################################
 ############################### 0. LOADING THE DATA ############################
@@ -29,15 +46,29 @@ imputed_norm = readRDS("../20_intermediate_files/imputed_norm.rds")
 ################################## 1. EDA ######################################
 ################################################################################
 
-######################## EVALUATE  ONE IMPUTED DATA SET ########################
-df = complete(imputed_norm, 1); df # just going to look at the first one
-df$logConvertedCompYearly = log(df$ConvertedCompYearly)
-
+######################## EVALUATE ONE IMPUTED DATA SET #########################
 head(df)
 str(df)
 dim(df)
 summary(df)
 colnames(df)
+
+
+rand_sample = sample(1:5, 1); set.seed(42); rand_sample
+df = complete(imputed_norm, rand_sample); df # just going to evaluate one for the project
+df$logConvertedCompYearly = log(df$ConvertedCompYearly)
+
+
+df %>% str
+
+# convert logical variables from numeric back to logical
+for (i in colnames(df)) {
+  if (class(df[[i]]) == "numeric") {
+    if (all(df[[i]] == df[[i]]^2)) {
+      df[[i]] = as.logical(df[[i]])
+    }
+  }
+}
 
 ################### EXPLORE LOGISTIC REGRESSION ON "LEADER" ####################
 # 
@@ -59,13 +90,17 @@ colnames(df)
 
 # confirm my response variable looks clean and log transform looks good
 hist(df$ConvertedCompYearly)
-hist(df$logConvertedCompYearly)
+hist(df$logConvertedCompYearly) # neat
 
 # Look at numeric predictors
 hist(df$YearsCodeProNum)
 hist(log(df$YearsCodeProNum)) # wow looks great but predictors don't need to be normally distributed
 ggplot(data=df, aes(x=YearsCodeProNum, y=logConvertedCompYearly)) + geom_point() #curved trend
-       
+   
+# Look at numeric predictors
+hist(df$logYearsCodeProNum)
+ggplot(data=df, aes(x=logYearsCodeProNum, y=logConvertedCompYearly)) + geom_point() #curved trend
+
 hist(df$YearsCodeNum) 
 hist(log(df$YearsCodeNum)) # not bad
 ggplot(data=df, aes(x=YearsCodeNum, y=logConvertedCompYearly)) + geom_point() #curved trend
@@ -74,13 +109,13 @@ ggplot(data=df, aes(x=YearsCodeNum, y=logConvertedCompYearly)) + geom_point() #c
 ggplot(data=df, aes(x=Age1stCode, y=logConvertedCompYearly)) + geom_boxplot() #*
 table(df$Age1stCode)
 
-ggplot(data=df, aes(x=EdLevel, y=logConvertedCompYearly)) + geom_boxplot()
+ggplot(data=df, aes(x=EdLevel, y=logConvertedCompYearly)) + geom_boxplot() #**
 table(df$EdLevel) # maybe collapse into less levels # DONE
 
-ggplot(data=df, aes(x=OrgSize, y=logConvertedCompYearly)) + geom_boxplot() #.
+ggplot(data=df, aes(x=OrgSize, y=logConvertedCompYearly)) + geom_boxplot() #*
 table(df$OrgSize) # maybe collapse into less levels #DONE
 
-ggplot(data=df, aes(x=Currency, y=logConvertedCompYearly)) + geom_boxplot() #?
+ggplot(data=df, aes(x=Currency, y=logConvertedCompYearly)) + geom_boxplot() #*
 table(df$Currency) 
 
 ggplot(data=df, aes(x=Age, y=logConvertedCompYearly)) + geom_boxplot() #***
@@ -89,7 +124,7 @@ table(df$Age) # maybe collapse into less levels # DONE
 ggplot(data=df, aes(x=Gender, y=logConvertedCompYearly)) + geom_boxplot() #*
 table(df$Gender) 
 
-ggplot(data=df, aes(x=Trans, y=logConvertedCompYearly)) + geom_boxplot() #.
+ggplot(data=df, aes(x=Trans, y=logConvertedCompYearly)) + geom_boxplot() # not significant
 table(df$Trans) 
 
 ggplot(data=df, aes(x=Sexuality, y=logConvertedCompYearly)) + geom_boxplot() # not significant
@@ -101,7 +136,7 @@ table(df$Ethnicity) # maybe collapse into less levels # DONE
 ggplot(data=df, aes(x=Accessibility, y=logConvertedCompYearly)) + geom_boxplot() # not significant
 table(df$Accessibility)
 
-ggplot(data=df, aes(x=MentalHealth, y=logConvertedCompYearly)) + geom_boxplot() #*
+ggplot(data=df, aes(x=MentalHealth, y=logConvertedCompYearly)) + geom_boxplot() # not significant
 table(df$MentalHealth)
 
 
@@ -113,22 +148,9 @@ ggplot(data=df, aes(x=US_State, y=logConvertedCompYearly)) + geom_boxplot() # di
 ############################### 2. MODEL SELECTION #############################
 ################################################################################
 
-# Drop unused columns
-dropcols = c("LearnCode","YearsCode","YearsCodePro","DevType")
-df[dropcols] = NULL
-
-df %>% str
-
-# convert logical variables from numeric back to logical
-for (i in colnames(df)) {
-  if (class(df[[i]]) == "numeric") {
-    if (all(df[[i]] == df[[i]]^2)) {
-      df[[i]] = as.logical(df[[i]])
-    }
-  }
-}
 
 ############################## LINEAR MODEL FITTING ############################
+
 # changing baseline for education level to "Masters" as recommended by Tego
 df = df %>% mutate(
   EdLevel = relevel(
@@ -140,31 +162,32 @@ df = df %>% mutate(
 # Model selection
 null_model = lm(logConvertedCompYearly ~ Gender + Ethnicity , data=df)
 full_model = lm(
-  logConvertedCompYearly ~ `EdLevel` +
-    `Age1stCode` +
-    `OrgSize` +
-    `Currency` +
-    `Age` +
-    `Gender` +
-    `Trans` +
-    `Sexuality` +
-    `Ethnicity` +
-    `Accessibility` +
-    `MentalHealth` +
-    # `YearsCodeNum` + highly correlated with YearsCodeProNum
-    `YearsCodeProNum` +
-    `OnlineResources` +
-    `School` +
-    `Peers` +
-    `OtherMethods` +
-    `Bootcamp` +
-    `SoftwareDevelopment` +
-    `DataScience` +
-    `Research` +
-    `DevOps_Admin` +
-    `ProductManager` +
-    `SeniorExecutive` +
-    `NonTechnicalRole`,
+  logConvertedCompYearly ~ 
+    EdLevel +
+    Age1stCode +
+    OrgSize +
+    Currency +
+    Age +
+    Gender +
+    Trans +
+    Sexuality +
+    Ethnicity +
+    Accessibility +
+    MentalHealth +
+    # YearsCodeNum + highly correlated with YearsCodeProNum
+    YearsCodeProNum +
+    OnlineResources +
+    School +
+    Peers +
+    OtherMethods +
+    Bootcamp +
+    SoftwareDevelopment +
+    DataScience +
+    Research +
+    DevOps_Admin +
+    ProductManager +
+    SeniorExecutive +
+    NonTechnicalRole,
   data = df
 )
 
@@ -197,7 +220,7 @@ summaryprint
 
 # Significant Variables:
 # Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + 
-# SeniorExecutive + DevOps_Admin + School + Research + OtherMethods
+# SeniorExecutive + DevOps_Admin + School + Research + OtherMethods + OnlineResources
 
 # BIC stepwise selection
 # step_model = step(null_model, scope = formula(full_model), direction = 'forward', trace=0, k=log(n))
@@ -207,15 +230,11 @@ summaryprint
 # Look at groups of binary predictors
 ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~Gender, ncol=4)  #*
+  facet_wrap(~Gender, ncol=4)  #**
 
 ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
   geom_boxplot() +
   facet_wrap(~SeniorExecutive, ncol=4) #**
-
-ggplot(df, aes(x=SeniorExecutive, y=logConvertedCompYearly)) +
-  geom_boxplot() +
-  facet_wrap(~Ethnicity, ncol=4) #**
 
 ggplot(df, aes(x=Gender, y=logConvertedCompYearly)) +
   geom_boxplot() +
@@ -223,38 +242,37 @@ ggplot(df, aes(x=Gender, y=logConvertedCompYearly)) +
 
 ggplot(df, aes(x=SeniorExecutive, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~Gender, ncol=4) #
+  facet_wrap(~Gender, ncol=4) #**
 
 ggplot(df, aes(x=Age, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~SeniorExecutive, ncol=4) #*
+  facet_wrap(~SeniorExecutive, ncol=4) # not significant
 
 ggplot(df, aes(x=SeniorExecutive, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~Age, ncol=4) #*
+  facet_wrap(~Age, ncol=4) # not significant
 
 ggplot(df, aes(x=OrgSize, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~SeniorExecutive, ncol=4) #*
-
-ggplot(df, aes(x=SeniorExecutive, y=logConvertedCompYearly)) +
-  geom_boxplot() +
-  facet_wrap(~OrgSize, ncol=4) #*
+  facet_wrap(~SeniorExecutive, ncol=4) #.
 
 # Look at predictors by state
 # sample 20 states to look at 
-# df_sample = df$US_State
+sample_states = df$US_State %>% unique %>% sample(20)
+df_sample = df[df$US_State.isin(sample_states)]
+
+
 ggplot(df, aes(x=Gender, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~US_State, ncol=4) #*
+  facet_wrap(~US_State, ncol=8) #*
 
 ggplot(df, aes(x=Ethnicity, y=logConvertedCompYearly)) +
   geom_boxplot() +
-  facet_wrap(~US_State, ncol=4) #*
+  facet_wrap(~US_State, ncol=8) #*
 
 # Significant Variables:
 # Gender + Ethnicity + YearsCodeProNum + Age + OrgSize + EdLevel + 
-# SeniorExecutive + DevOps_Admin + School + Research + OtherMethods
+# SeniorExecutive + DevOps_Admin + School + Research + OtherMethods + OnlineResources
 
 
 interact_model = lm(
@@ -269,6 +287,7 @@ interact_model = lm(
     School + 
     Research + 
     OtherMethods +
+    OnlineResources + 
     SeniorExecutive:Ethnicity +
     SeniorExecutive:Gender +
     SeniorExecutive:Age +
@@ -280,7 +299,7 @@ interact_model = lm(
 )
 
 stepint_model = step(null_model, scope = list(upper=interact_model, lower=null_model), direction = 'both', trace=0, k=log(n))
-summary(stepint_model) #nochange
+summary(stepint_model) #nochange -> interactions not significant
 
 ########################## Pretty table & plot below ###########################
 
@@ -304,7 +323,20 @@ plot(step_model, which=4)                       # no influential points?
 plot(step_model, which=5)                       # several outliers but not influential
 plot(df$YearsCodeNum, step_model$residuals)     # linearity assumption holds
 plot(df$YearsCodeProNum, step_model$residuals)
+plot(df$logYearsCodeProNum, step_model$residuals)
 vif(step_model)           
+
+num_cols = c(
+  "YearsCodeProNum",
+  "SeniorExecutive",
+  "DevOps_Admin",
+  "OtherMethods",
+  "Research",
+  "School",
+  "OnlineResources"
+)
+
+cor(df[num_cols])
 
 ########################### HIERARCHICAL MODEL FITTING #########################
 
@@ -341,11 +373,11 @@ randint_model = lmer(
 )
 
 randint_summary = summary(randint_model) 
+randint_summary
 AIC(randint_model) #13033.81
 
 anova(randint_model, step_model) 
 xtable(anova(randint_model, step_model))
-
 
 # Level = State (random intercept + random slope by Ethnicity) NS
 randslope_model1 = lmer(
@@ -360,7 +392,6 @@ randslope_model1 = lmer(
     School +
     Research +
     OtherMethods + 
-    (1 | US_State) + 
     (Ethnicity | US_State),
   data = df
 )
@@ -379,7 +410,6 @@ randslope_model2 = lmer(
     School +
     Research +
     OtherMethods +
-    (1 | US_State) +
     (Gender | US_State),
   data = df
 )
@@ -399,16 +429,17 @@ randslope_model3 = lmer(
     School +
     Research +
     OtherMethods +
-    (1 | US_State) + 
     (OrgSize | US_State), 
-  data = df)
+  data = df,
+  control = lmerControl(optimizer="bobyqa")
+)
 anova(randslope_model3, randint_model) 
 
 # Level = State (random intercept + random slope by YearsCodeProNum) 0.01044 *
 randslope_model4 = lmer(
   logConvertedCompYearly ~ Gender +
     Ethnicity +
-    YearsCodeProNum +
+    #YearsCodeProNum +
     Age +
     OrgSize +
     EdLevel +
@@ -417,9 +448,10 @@ randslope_model4 = lmer(
     School +
     Research +
     OtherMethods +
-    (1 | US_State) + 
     (YearsCodeProNum | US_State), 
-  data = df)
+  data = df,
+  control = lmerControl(optimizer="bobyqa"))
+summary(randslope_model4)
 anova(randslope_model4, randint_model) 
 
 # Level = State (random intercept + random slope by Age) 0.002854 **
@@ -436,7 +468,6 @@ randslope_model5 = lmer(
     School +
     Research +
     OtherMethods +
-    (1 | US_State) + 
     (Age | US_State), 
   data = df)
 anova(randslope_model5, randint_model) 
@@ -487,6 +518,7 @@ predict(final_model)
 ################################################################################
 
 ###################### JOINING ALL IMP DATA SETS INTO ONE ######################
+
 
 df_complete = complete(imputed_norm, "all")
 
@@ -541,7 +573,6 @@ randslope_final = lmer(
     School +
     Research +
     OtherMethods +
-    (1 | US_State) + 
     (Age | US_State), 
   data = df_complete
 )
@@ -550,6 +581,8 @@ summary(randslope_final)
 
 ################################ POOL MODELS ###################################
 
+# Questions: How to change binary variable types back to logi?
+# how to access additional parameters
 
 imp_model = with(
   data = imputed_norm,
@@ -570,12 +603,195 @@ imp_model = with(
   )
 )
 
+help(lmer_pool)
+lmer_pool(step_model)
+
+lmer_pool2(imp_model)
 final_model_pooled = pool(imp_model)
+final_model_pooled$glanced
+final_model_pooled$pooled
+confint(final_model_pooled)
 summary(final_model_pooled)
 saveRDS(final_model_pooled, "../20_intermediate_files/final_model.rds")
 
 
 ################################################################################
+
+
+
+
+################################################################################
+######################### EXPERIMENT (DID NOT USE) #############################
+################################################################################
+
+df$ConvertedCompYearly %>% median
+
+# df_low = df[df$ConvertedCompYearly <= (df$ConvertedCompYearly %>% median),]
+# df_high = df[df$ConvertedCompYearly > (df$ConvertedCompYearly %>% median),]
+
+df_low = df[df$SeniorExecutive == 0,]
+df_high = df[df$SeniorExecutive != 0,]
+
+hist(df_low$YearsCodeProNum)
+hist(df_high$YearsCodeProNum)
+
+hist(df_low$ConvertedCompYearly)
+hist(df_high$ConvertedCompYearly)
+
+table(df_low$SeniorExecutive)
+table(df_high$SeniorExecutive)
+
+hist(log(df_low$ConvertedCompYearly))
+hist(log(df_high$ConvertedCompYearly))
+
+table(df_low$Gender)
+table(df_high$Gender)
+
+table(df_low$Ethnicity)
+table(df_high$Ethnicity)
+
+ggplot(data=df_low, aes(x=Ethnicity, y=logConvertedCompYearly)) + geom_boxplot() #*
+ggplot(data=df_high, aes(x=Ethnicity, y=logConvertedCompYearly)) + geom_boxplot() #*
+
+ggplot(data=df_low, aes(x=Ethnicity, y=ConvertedCompYearly)) + geom_boxplot() #*
+ggplot(data=df_high, aes(x=Ethnicity, y=ConvertedCompYearly)) + geom_boxplot() #*
+
+ggplot(data=df_low, aes(x=Gender, y=logConvertedCompYearly)) + geom_boxplot() #*
+ggplot(data=df_high, aes(x=Gender, y=logConvertedCompYearly)) + geom_boxplot() #*
+
+
+df %>% str
+
+# convert logical variables from numeric back to logical
+for (i in colnames(df_low)) {
+  if (class(df_low[[i]]) == "numeric") {
+    if (all(df_low[[i]] == df_low[[i]]^2)) {
+      df_low[[i]] = as.logical(df_low[[i]])
+    }
+  }
+}
+
+for (i in colnames(df_high)) {
+  if (class(df_high[[i]]) == "numeric") {
+    if (all(df_high[[i]] == df_high[[i]]^2)) {
+      df_high[[i]] = as.logical(df_high[[i]])
+    }
+  }
+}
+
+
+df_low = df_low %>% mutate(
+  EdLevel = relevel(
+    EdLevel,
+    "Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)"
+  )
+)
+
+
+df_high = df_high %>% mutate(
+  EdLevel = relevel(
+    EdLevel,
+    "Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)"
+  )
+)
+
+
+null_model_low = lm(logConvertedCompYearly ~ Gender + Ethnicity , data=df_low)
+interact_model_low = lm(
+  logConvertedCompYearly ~  `EdLevel` +
+    `Age1stCode` +
+    `OrgSize` +
+    `Currency` +
+    `Age` +
+    `Gender` +
+    `Trans` +
+    `Sexuality` +
+    `Ethnicity` +
+    `Accessibility` +
+    `MentalHealth` +
+    # `YearsCodeNum` + highly correlated with YearsCodeProNum
+    `YearsCodeProNum` +
+    `OnlineResources` +
+    `School` +
+    `Peers` +
+    `OtherMethods` +
+    `Bootcamp` +
+    `SoftwareDevelopment` +
+    `DataScience` +
+    `Research` +
+    `DevOps_Admin` +
+    `ProductManager` +
+    `NonTechnicalRole`+
+    Ethnicity:YearsCodeProNum + 
+    Gender:YearsCodeProNum +
+    OrgSize:YearsCodeProNum,
+  data = df_low
+)
+
+n_low=nrow(df_low)
+#BIC stepwise selection
+step_model = step(null_model_low, scope = list(upper=interact_model_low, lower=null_model_low), direction = 'both', trace=0, k=log(n_low))
+summary(step_model) # more parsimonious than AIC, slightly worse R^2 (0.4) -> CHOSEN ONE
+AIC(step_model) #12761.55
+
+par(bty='n')
+plot(step_model, which=1)                       # equal variance and independence assum problem
+plot(step_model, which=2)                       # OOOOOUUFFF
+plot(step_model, which=3)
+plot(step_model, which=4)                       # no influential points?
+plot(step_model, which=5)                       # several outliers but not influential
+plot(df_low$YearsCodeNum, step_model$residuals)     # linearity assumption holds
+plot(df_low$YearsCodeProNum, step_model$residuals)
+vif(step_model)
+
+
+null_model_high = lm(logConvertedCompYearly ~ Gender + Ethnicity , data=df_high)
+interact_model_high = lm(
+  logConvertedCompYearly ~  `EdLevel` +
+    `Age1stCode` +
+    `OrgSize` +
+    `Age` +
+    `Gender` +
+    `Trans` +
+    `Sexuality` +
+    `Ethnicity` +
+    # `YearsCodeNum` + highly correlated with YearsCodeProNum
+    `YearsCodeProNum` +
+    `OnlineResources` +
+    `School` +
+    `Peers` +
+    `OtherMethods` +
+    `Bootcamp` +
+    `SoftwareDevelopment` +
+    `DataScience` +
+    `Research` +
+    `DevOps_Admin` +
+    `ProductManager` +
+    `NonTechnicalRole`,
+  data = df_high
+)
+
+n_high=nrow(df_high)
+#BIC stepwise selection
+step_model = step(null_model_high, scope = list(upper=interact_model_high, lower=null_model_high), direction = 'both', trace=0, k=log(n_high))
+summary(step_model) # more parsimonious than AIC, slightly worse R^2 (0.4) -> CHOSEN ONE
+AIC(step_model) #516
+
+par(bty='n')
+plot(step_model, which=1)                       
+plot(step_model, which=2)                       
+plot(step_model, which=3)
+plot(step_model, which=4)                       
+plot(step_model, which=5)                     
+plot(df_high$YearsCodeNum, step_model$residuals)    
+plot(df_high$YearsCodeProNum, step_model$residuals)
+vif(step_model)
+
+################################################################################
+############################## END OF EXPERIMENT ###############################
+################################################################################
+
+
 
 
 ############################# Pretty table below ###############################
