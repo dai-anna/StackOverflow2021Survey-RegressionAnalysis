@@ -53,6 +53,9 @@ df_us = df_us %>% filter(Country == "United States of America")
 location_cols = c("Country", "UK_Country")
 df_us[location_cols] = NULL
 
+dim(df_us)
+df_us %>% colnames
+
 ########################## EXAMINE RESPONSE VARIABLE ###########################
 
 df_us$compcompare = (df_us$CompTotal == df_us$ConvertedCompYearly)
@@ -63,6 +66,15 @@ ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)  
 # However, some conversions seem sketchy as users might have mistakenly marked
 # weekly/monthly when they inputted their yearly salary
 # I will take the ConvertedCompYearly and only use other columns to examine outliers
+
+########################### PRETTY PLOT FOR REPORT #############################
+
+ggplot(df_us,aes(x=ConvertedCompYearly)) +
+  geom_histogram(bins = 40, fill = "#061953", alpha=1) +  
+  labs(title="Distribution of ConvertedCompYearly (Raw)",y="Count", x="ConvertedCompYearly (USD)") +
+  theme_classic() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust=0.5))
+
 
 ########################## ADDRESS RESPONSE OUTLIERS ###########################
 
@@ -181,11 +193,22 @@ df_us$ConvertedCompYearly[df_us$compcompare == FALSE &
 
 sum(is.na(df_us$ConvertedCompYearly))
 
-############## Plot the outcome ###############
-ggplot(data = df_us, aes(x = ConvertedCompYearly)) + geom_histogram(bins = 50)
-# OH DEAR OH DEAR
+########################### PRETTY PLOT FOR REPORT #############################
+
+ggplot(df_us,aes(x=ConvertedCompYearly)) +
+  geom_histogram(bins = 40, fill = "#061953", alpha=1) +  
+  labs(title="Distribution of ConvertedCompYearly (Clean)",y="Count", x="ConvertedCompYearly (USD)") +
+  theme_classic() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust=0.5))
 
 ############## Log to the Rescue ###############
+df_us$logConvertedCompYearly = log(df_us$ConvertedCompYearly)
+ggplot(df_us,aes(x=logConvertedCompYearly)) +
+  geom_histogram(bins = 40, fill = "#061953", alpha=1) +  
+  labs(title="Distribution of ConvertedCompYearly (Log)",y="Count", x="log of ConvertedCompYearly (USD)") +
+  theme_classic() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust=0.5))
+
 df_us$logConvertedCompYearly = log(df_us$ConvertedCompYearly)
 ggplot(data = df_us, aes(x = logConvertedCompYearly)) + geom_histogram(bins = 50)  # few large outliers
 # MUCH BETTER -> Issues due to N/As? No
@@ -653,6 +676,10 @@ sapply(df_us, function(z)
   (sum(is.na(z)) / length(z)))*100
 sapply(df_us, function(z)
   sum(is.na(z)))
+
+# table for report
+xtable(transpose(data.frame(sapply(df_us, function(z)
+  (sum(is.na(z)) / length(z)))*100)))
 
 ################################################################################
 ############################# COUNTRIES APPROACH ###############################

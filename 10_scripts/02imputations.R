@@ -27,11 +27,6 @@ dim(df)
 summary(df)
 colnames(df)
 
-sapply(df, function(z)
-  (sum(is.na(z)) / length(z)))*100
-sapply(df, function(z)
-  sum(is.na(z)))
-
 sapply(df, class)
 
 # confirm my response variable looks clean and log transform looks good
@@ -43,7 +38,7 @@ dropcols = c("LearnCode","YearsCode","YearsCodePro","DevType", "logConvertedComp
 df[dropcols] = NULL
 
 ################################################################################
-############################## 1. Imputing the data ############################
+######################## O. Evaluating the missing data ########################
 ################################################################################
 
 # rename columns to remove spaces for mice... cries
@@ -57,7 +52,54 @@ df <- df %>%
          SeniorExecutive = `Senior Executive (C-Suite, VP, etc.)`,
          NonTechnicalRole = `Other/Non-Technical`,
          OtherMethods = Other
-         )
+  )
+
+
+############################# Examine N/As #####################################
+df_eval = df
+all_predictors = df_eval %>% colnames
+all_predictors = all_predictors[(all_predictors != "ConvertedCompYearly") & (all_predictors != "US_State")]; all_predictors
+
+sapply(df_eval, function(z)
+  (sum(is.na(z)) / length(z)))*100
+sapply(df_eval, function(z)
+  sum(is.na(z)))
+
+####### Logistic regression on each variable as logistic missing or not ########
+
+df_eval = df #reset
+all_predictors = df_eval %>% colnames
+all_predictors = all_predictors[(all_predictors != "ConvertedCompYearly") & (all_predictors != "US_State")]; all_predictors
+
+predictor =  "Gender" # <<<<<<<<<<<< CHANGE VARIABLES HERE TO EVALUATE
+names(df_eval)[names(df_eval) == predictor] = "predictor"
+predictors = all_predictors[all_predictors != predictor]; predictors; length(predictors)
+df$response = is.na(df_eval$predictor)
+eval_formula = as.formula(paste("response ~",
+                 paste(unlist(predictors),collapse=" + "))); eval_formula
+eval = glm(eval_formula, data = df_eval, family = binomial())
+summary(eval)
+
+df_eval$response = is.na(df_eval$Age1stCode)
+
+# NOTE: checked all model but most models above did not converge or had mostly close to 1 p-scores
+# there were a few that other predictors were able to predict, suggesting missing at random
+
+# these are evaluated manually for patterns as there may be too few missing data to predict
+df[is.na(df_eval$EdLevel),]
+df[is.na(df_eval$Ethnicity),]
+df[is.na(df_eval$Gender),]
+df[is.na(df_eval$YearsCodeProNum),]
+
+# the below are 100% correlated in terms of missingness because they came from the same survey question
+df[is.na(df_eval$SeniorExecutive),]
+df[is.na(df_eval$DataScience),]
+
+# will be able to proceed with imputations
+
+################################################################################
+############################## 1. Imputing the data ############################
+################################################################################
 
 # limit df to the 50 states + DC and change N/A to "Not Provided" - cannot impute
 df$US_State = as.character(df$US_State)
@@ -108,8 +150,8 @@ if(IWANTTOWAITANOTHER30MIN == TRUE){
 
 # Assess norm imputations
 imputed_norm = readRDS("../20_intermediate_files/imputed_norm.rds")
-# stripplot(imputed_norm, col=c("grey","darkred"),pch=c(1,20)) # this is fine, too slow to rerun
-# densityplot(imputed_norm) # this is fine, too slow to rerun
+stripplot(imputed_norm, col=c("grey","#061953"),pch=c(1,20)) # this is fine, too slow to rerun
+densityplot(imputed_norm) # this is fine, too slow to rerun
 
 xyplot(
   imputed_norm,
@@ -117,7 +159,7 @@ xyplot(
     .imp,
   pch = c(1, 20),
   cex = 1.4,
-  col = c("grey", "darkred")
+  col = c("grey", "#061953")
 )
 xyplot(
   imputed_norm,
@@ -125,7 +167,7 @@ xyplot(
     .imp,
   pch = c(1, 20),
   cex = 1.4,
-  col = c("grey", "darkred")
+  col = c("grey", "#061953")
 )
 xyplot(
   imputed_norm,
@@ -133,7 +175,7 @@ xyplot(
     .imp,
   pch = c(1, 20),
   cex = 1.4,
-  col = c("grey", "darkred")
+  col = c("grey", "#061953")
 )
 xyplot(
   imputed_norm,
@@ -141,7 +183,7 @@ xyplot(
     .imp,
   pch = c(1, 20),
   cex = 1.4,
-  col = c("grey", "darkred")
+  col = c("grey", "#061953")
 )
 
 
