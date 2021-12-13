@@ -618,7 +618,7 @@ knitr::kable(ranefprint, format="latex", booktabs=TRUE) %>%
 
 ######################## Demo Personas for Interpretation ######################
 
-Gender = c("Woman", "Man")
+Gender = c("Man", "Woman")
 Ethnicity = c("East Asian", "East Asian")
 YearsCodeProNum = c(2, 2)
 Age = c("25-34 years old", "25-34 years old")
@@ -626,10 +626,10 @@ OrgSize = c("10,000 or more employees", "10,000 or more employees")
 EdLevel = c("Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)", "Master’s or Professional degree (M.A., M.S., M.Eng., MBA, JD, MD, etc.)")
 SeniorExecutive = c(FALSE, FALSE)
 DevOps_Admin = c(FALSE, FALSE)
-School = c(FALSE, FALSE)
+School = c(TRUE, TRUE)
 Research = c(FALSE, FALSE)
 OtherMethods = c(FALSE, FALSE)
-US_State = c("North Carolina", "North Carolina")
+US_State = c("Washington", "Washington")
 
 demo_personas = data.frame(Gender, Ethnicity, YearsCodeProNum, Age, OrgSize, EdLevel, SeniorExecutive, DevOps_Admin, School, Research, OtherMethods)
 
@@ -654,6 +654,7 @@ write_parquet(xdf, "../20_intermediate_files/ranef_randint_bystate.parquet")
 preds = data.frame(predict(final_model))
 truth = data.frame(df$logConvertedCompYearly)
 ydf = cbind(preds, truth)
+write_parquet(ydf, "../20_intermediate_files/predictions.parquet")
 
 ################################################################################
 ################################################################################
